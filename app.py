@@ -200,9 +200,82 @@ html, body, [class*="css"] {
 }
 [data-testid="stSidebar"] * { color: var(--blanco) !important; }
 
-/* Inputs */
-.stSelectbox > div > div,
-.stSlider > div { background: var(--gris-mid) !important; }
+/* ── Inputs: selectbox, slider, radio ──────────────────────────── */
+
+/* Contenedor del selectbox */
+.stSelectbox > div > div {
+    background-color: #2E2E2E !important;
+    border: 1px solid #555 !important;
+    border-radius: 4px !important;
+    color: #F5F5F0 !important;
+}
+
+/* Texto visible dentro del selectbox */
+.stSelectbox > div > div > div,
+.stSelectbox span,
+.stSelectbox p,
+[data-baseweb="select"] span,
+[data-baseweb="select"] div {
+    color: #F5F5F0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 0.9rem !important;
+}
+
+/* Placeholder (texto gris cuando nada seleccionado) */
+[data-baseweb="select"] [data-testid="stSelectboxVirtualDropdown"],
+[data-baseweb="select"] input::placeholder {
+    color: #AAAAAA !important;
+}
+
+/* Dropdown abierto — lista de opciones */
+[data-baseweb="popover"],
+[data-baseweb="menu"],
+[role="listbox"],
+[role="option"] {
+    background-color: #2E2E2E !important;
+    border: 1px solid #555 !important;
+    color: #F5F5F0 !important;
+}
+
+/* Opción al hacer hover */
+[role="option"]:hover,
+[data-baseweb="option"]:hover {
+    background-color: #C8102E !important;
+    color: #FFFFFF !important;
+}
+
+/* Opción seleccionada */
+[aria-selected="true"] {
+    background-color: #8B0A1E !important;
+    color: #FFFFFF !important;
+}
+
+/* Select label */
+.stSelectbox label,
+.stRadio label,
+.stSlider label {
+    color: #CCCCCC !important;
+    font-size: 0.82rem !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    letter-spacing: 0.03em;
+}
+
+/* Radio buttons */
+.stRadio > div {
+    background: transparent !important;
+}
+.stRadio [data-testid="stWidgetLabel"] p {
+    color: #CCCCCC !important;
+}
+
+/* Slider */
+.stSlider > div { background: transparent !important; }
+.stSlider [data-testid="stTickBar"] {
+    color: #888 !important;
+}
+
+/* Número del slider */
+.stSlider p { color: #F5F5F0 !important; }
 
 /* Log de auditoría */
 .audit-log {
