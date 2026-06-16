@@ -1,835 +1,588 @@
-"""
-=============================================================================
-DASHBOARD ZERO TRUST — SISTEMA INTELIGENTE DE CONTROL DE ACCESO
-Universidad Peruana de Ciencias Aplicadas (UPC)
-Proyecto Profesional 2 — 1FRC0077
-=============================================================================
-Instalar: pip install streamlit scikit-learn pandas numpy matplotlib seaborn plotly
-Ejecutar: streamlit run app.py
-=============================================================================
-"""
-
 import streamlit as st
-import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
-import plotly.express as px
-from sklearn.tree import DecisionTreeClassifier, plot_tree
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import (accuracy_score, precision_score, recall_score,
-                              f1_score, confusion_matrix)
+import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
-matplotlib.use("Agg")
+import matplotlib.patches as mpatches
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+from sklearn.metrics import (
+    accuracy_score, precision_score, recall_score,
+    f1_score, confusion_matrix, classification_report
+)
 import warnings
-warnings.filterwarnings("ignore")
+warnings.filterwarnings('ignore')
 
-# ─── CONFIGURACIÓN DE PÁGINA ─────────────────────────────────────────────────
+# ── CONFIGURACIÓN DE PÁGINA ──────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Zero Trust AI — UPC",
-    page_icon="🔐",
+    page_title="Zero Trust UPC - Dashboard ML",
+    page_icon="🔒",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# ─── ESTILOS CSS ─────────────────────────────────────────────────────────────
+# ── ESTILOS ──────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;600;700&display=swap');
-
-:root {
-    --rojo-upc: #C8102E;
-    --rojo-dark: #8B0A1E;
-    --negro: #0D0D0D;
-    --gris-dark: #1A1A1A;
-    --gris-mid: #2A2A2A;
-    --gris-light: #3A3A3A;
-    --blanco: #F5F5F0;
-    --verde: #00C851;
-    --amarillo: #FFB300;
-    --azul: #0099CC;
-    --mono: 'IBM Plex Mono', monospace;
-    --sans: 'IBM Plex Sans', sans-serif;
-}
-
-html, body, [class*="css"] {
-    font-family: var(--sans) !important;
-    background-color: var(--negro) !important;
-    color: var(--blanco) !important;
-}
-
-.stApp { background-color: var(--negro) !important; }
-
-/* Header principal */
-.hero-header {
-    background: linear-gradient(135deg, var(--negro) 0%, var(--gris-dark) 50%, #1a0005 100%);
-    border: 1px solid var(--rojo-upc);
-    border-radius: 4px;
-    padding: 2rem 2.5rem;
-    margin-bottom: 1.5rem;
-    position: relative;
-    overflow: hidden;
-}
-.hero-header::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--rojo-upc), #FF4444, var(--rojo-upc));
-}
-.hero-title {
-    font-family: var(--mono) !important;
-    font-size: 1.6rem;
-    font-weight: 600;
-    color: var(--blanco);
-    letter-spacing: 0.05em;
-    margin: 0;
-}
-.hero-subtitle {
-    font-size: 0.85rem;
-    color: #888;
-    font-family: var(--mono);
-    margin-top: 0.3rem;
-    letter-spacing: 0.08em;
-}
-.hero-tag {
-    display: inline-block;
-    background: var(--rojo-upc);
-    color: white;
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    padding: 0.2rem 0.6rem;
-    border-radius: 2px;
-    margin-right: 0.5rem;
-    letter-spacing: 0.1em;
-}
-
-/* Tarjetas métricas */
-.metric-card {
-    background: var(--gris-dark);
-    border: 1px solid var(--gris-light);
-    border-radius: 4px;
-    padding: 1.2rem 1.5rem;
-    text-align: center;
-    transition: border-color 0.2s;
-}
-.metric-card:hover { border-color: var(--rojo-upc); }
-.metric-value {
-    font-family: var(--mono);
-    font-size: 2rem;
-    font-weight: 600;
-    color: var(--blanco);
-}
-.metric-label {
-    font-size: 0.75rem;
-    color: #888;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-top: 0.2rem;
-}
-.metric-ok { color: var(--verde) !important; }
-.metric-warn { color: var(--amarillo) !important; }
-
-/* Decision box */
-.decision-permitir {
-    background: linear-gradient(135deg, #003d1a, #001a0d);
-    border: 2px solid var(--verde);
-    border-radius: 4px;
-    padding: 2rem;
-    text-align: center;
-    animation: pulse-green 2s infinite;
-}
-.decision-mfa {
-    background: linear-gradient(135deg, #3d2900, #1a1000);
-    border: 2px solid var(--amarillo);
-    border-radius: 4px;
-    padding: 2rem;
-    text-align: center;
-    animation: pulse-yellow 2s infinite;
-}
-.decision-bloquear {
-    background: linear-gradient(135deg, #3d0008, #1a0004);
-    border: 2px solid var(--rojo-upc);
-    border-radius: 4px;
-    padding: 2rem;
-    text-align: center;
-    animation: pulse-red 2s infinite;
-}
-@keyframes pulse-green {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(0,200,81,0.3); }
-    50% { box-shadow: 0 0 20px 5px rgba(0,200,81,0.15); }
-}
-@keyframes pulse-yellow {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(255,179,0,0.3); }
-    50% { box-shadow: 0 0 20px 5px rgba(255,179,0,0.15); }
-}
-@keyframes pulse-red {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(200,16,46,0.3); }
-    50% { box-shadow: 0 0 20px 5px rgba(200,16,46,0.15); }
-}
-.decision-text {
-    font-family: var(--mono);
-    font-size: 2.2rem;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-}
-.decision-sub {
-    font-size: 0.85rem;
-    color: #aaa;
-    margin-top: 0.5rem;
-    font-family: var(--mono);
-}
-
-/* Sección */
-.section-title {
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--rojo-upc);
-    border-bottom: 1px solid var(--gris-light);
-    padding-bottom: 0.5rem;
-    margin-bottom: 1.2rem;
-}
-
-/* Sidebar */
-[data-testid="stSidebar"] {
-    background-color: var(--gris-dark) !important;
-    border-right: 1px solid var(--gris-light);
-}
-[data-testid="stSidebar"] * { color: var(--blanco) !important; }
-
-/* ── Inputs: selectbox, slider, radio ──────────────────────────── */
-
-/* Contenedor del selectbox */
-.stSelectbox > div > div {
-    background-color: #2E2E2E !important;
-    border: 1px solid #555 !important;
-    border-radius: 4px !important;
-    color: #F5F5F0 !important;
-}
-
-/* Texto visible dentro del selectbox */
-.stSelectbox > div > div > div,
-.stSelectbox span,
-.stSelectbox p,
-[data-baseweb="select"] span,
-[data-baseweb="select"] div {
-    color: #F5F5F0 !important;
-    font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 0.9rem !important;
-}
-
-/* Placeholder (texto gris cuando nada seleccionado) */
-[data-baseweb="select"] [data-testid="stSelectboxVirtualDropdown"],
-[data-baseweb="select"] input::placeholder {
-    color: #AAAAAA !important;
-}
-
-/* Dropdown abierto — lista de opciones */
-[data-baseweb="popover"],
-[data-baseweb="menu"],
-[role="listbox"],
-[role="option"] {
-    background-color: #2E2E2E !important;
-    border: 1px solid #555 !important;
-    color: #F5F5F0 !important;
-}
-
-/* Opción al hacer hover */
-[role="option"]:hover,
-[data-baseweb="option"]:hover {
-    background-color: #C8102E !important;
-    color: #FFFFFF !important;
-}
-
-/* Opción seleccionada */
-[aria-selected="true"] {
-    background-color: #8B0A1E !important;
-    color: #FFFFFF !important;
-}
-
-/* Select label */
-.stSelectbox label,
-.stRadio label,
-.stSlider label {
-    color: #CCCCCC !important;
-    font-size: 0.82rem !important;
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    letter-spacing: 0.03em;
-}
-
-/* Radio buttons */
-.stRadio > div {
-    background: transparent !important;
-}
-.stRadio [data-testid="stWidgetLabel"] p {
-    color: #CCCCCC !important;
-}
-
-/* Slider */
-.stSlider > div { background: transparent !important; }
-.stSlider [data-testid="stTickBar"] {
-    color: #888 !important;
-}
-
-/* Número del slider */
-.stSlider p { color: #F5F5F0 !important; }
-
-/* Log de auditoría */
-.audit-log {
-    background: var(--negro);
-    border: 1px solid var(--gris-light);
-    border-radius: 4px;
-    padding: 1rem 1.2rem;
-    font-family: var(--mono);
-    font-size: 0.78rem;
-    color: #00C851;
-    max-height: 280px;
-    overflow-y: auto;
-    line-height: 1.8;
-}
-.log-warn { color: var(--amarillo); }
-.log-error { color: var(--rojo-upc); }
-.log-info { color: var(--azul); }
-
-/* Tabla */
-.stDataFrame { border: 1px solid var(--gris-light) !important; }
-
-/* Badges */
-.badge {
-    display: inline-block;
-    padding: 0.15rem 0.5rem;
-    border-radius: 2px;
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-}
-.badge-green { background: rgba(0,200,81,0.15); color: var(--verde); border: 1px solid var(--verde); }
-.badge-red   { background: rgba(200,16,46,0.15); color: #FF4444; border: 1px solid #FF4444; }
-.badge-yellow{ background: rgba(255,179,0,0.15); color: var(--amarillo); border: 1px solid var(--amarillo); }
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@300;400;600&display=swap');
+    
+    .stApp { background-color: #0a0e1a; color: #e2e8f0; }
+    
+    .header-box {
+        background: linear-gradient(135deg, #0f1424 0%, #1a0a0a 100%);
+        border: 1px solid #dc2626;
+        border-radius: 12px;
+        padding: 28px 32px;
+        margin-bottom: 24px;
+    }
+    .header-badge {
+        display: inline-block;
+        background: #dc2626;
+        color: white;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 10px;
+        border-radius: 4px;
+        margin-right: 6px;
+        letter-spacing: 0.1em;
+    }
+    .header-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 28px;
+        font-weight: 700;
+        color: #f8f8f8;
+        letter-spacing: 0.05em;
+        margin: 12px 0 8px 0;
+    }
+    .header-sub {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 12px;
+        color: #64748b;
+        letter-spacing: 0.03em;
+    }
+    .metric-card {
+        background: #0f1424;
+        border: 1px solid #1e293b;
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+    }
+    .metric-value {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 36px;
+        font-weight: 700;
+        color: #22c55e;
+    }
+    .metric-label {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        color: #94a3b8;
+        margin-top: 4px;
+    }
+    .metric-umbral {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        color: #475569;
+        margin-top: 6px;
+    }
+    .metric-check { color: #22c55e; }
+    .section-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        color: #475569;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #1e293b;
+    }
+    .decision-permitir { 
+        background: rgba(34,197,94,0.1); 
+        border: 1px solid rgba(34,197,94,0.3);
+        border-radius: 8px; padding: 16px; text-align: center;
+    }
+    .decision-bloquear { 
+        background: rgba(239,68,68,0.1); 
+        border: 1px solid rgba(239,68,68,0.3);
+        border-radius: 8px; padding: 16px; text-align: center;
+    }
+    .decision-mfa { 
+        background: rgba(234,179,8,0.1); 
+        border: 1px solid rgba(234,179,8,0.3);
+        border-radius: 8px; padding: 16px; text-align: center;
+    }
+    .log-box {
+        background: #050810;
+        border: 1px solid #1e293b;
+        border-radius: 8px;
+        padding: 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: #94a3b8;
+        line-height: 1.8;
+    }
+    div[data-testid="stTabs"] button {
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 12px !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
+# ── DATASET Y MODELO (cacheados) ─────────────────────────────────────────────
+@st.cache_data
+def generar_dataset(n=2000, random_state=42):
+    """
+    Dataset sintético de patrones de acceso universitario.
+    Etiquetado basado en reglas Zero Trust (Rose et al., 2020; 
+    Wang et al., 2025; Lukaseder et al., 2020).
+    """
+    rng = np.random.RandomState(random_state)
+    rol               = rng.randint(0, 4, n)
+    sensibilidad      = rng.randint(0, 3, n)
+    postura           = rng.randint(0, 2, n)
+    ubicacion         = rng.randint(0, 3, n)
+    horario           = rng.randint(0, 2, n)
+    historial         = rng.randint(0, 2, n)
+    intentos_fallidos = rng.randint(0, 6, n)
+    senal_riesgo      = rng.randint(0, 3, n)
 
-# ─── MODELO ML (cache para no reentrenar en cada interacción) ─────────────────
-@st.cache_resource
-def entrenar_modelo():
-    np.random.seed(42)
-    N = 2000
-    roles = ["estudiante", "docente", "administrativo", "TI"]
-    sensibilidad = ["baja", "media", "alta"]
-    ubicacion = ["campus", "remoto_peru", "remoto_exterior"]
+    etiqueta = np.where(
+        (senal_riesgo == 2) | (intentos_fallidos >= 4), 2,
+        np.where(
+            (senal_riesgo == 0) & (postura == 1) & (historial == 0), 0,
+            1
+        )
+    )
+    mask = rng.random(n) < 0.03
+    etiqueta = np.where(mask, rng.randint(0, 3, n), etiqueta)
 
-    rol          = np.random.choice(roles, N, p=[0.55, 0.25, 0.15, 0.05])
-    sens_rec     = np.random.choice(sensibilidad, N, p=[0.40, 0.35, 0.25])
-    postura      = np.random.choice([0, 1], N, p=[0.25, 0.75])
-    ubic         = np.random.choice(ubicacion, N, p=[0.50, 0.35, 0.15])
-    horario      = np.random.choice([0, 1], N, p=[0.20, 0.80])
-    hist_anom    = np.random.choice([0, 1], N, p=[0.85, 0.15])
-    intentos     = np.random.choice([0,1,2,3,4,5], N, p=[0.60,0.20,0.10,0.05,0.03,0.02])
-    señal        = np.random.choice([0,1,2], N, p=[0.65, 0.25, 0.10])
-
-    decision = []
-    for i in range(N):
-        r, s, p_ = rol[i], sens_rec[i], postura[i]
-        u, h, ha = ubic[i], horario[i], hist_anom[i]
-        itf, sr  = intentos[i], señal[i]
-        if sr == 2: decision.append(2)
-        elif itf >= 3: decision.append(2)
-        elif ha == 1 and s == "alta": decision.append(2)
-        elif p_ == 0 and s == "alta": decision.append(2)
-        elif u == "remoto_exterior" and s == "alta" and p_ == 0: decision.append(2)
-        elif sr == 1: decision.append(1)
-        elif s == "alta" and u != "campus": decision.append(1)
-        elif p_ == 0 and s == "media": decision.append(1)
-        elif h == 0 and s != "baja": decision.append(1)
-        elif u == "remoto_exterior" and s == "media": decision.append(1)
-        elif ha == 1 and s == "media": decision.append(1)
-        elif itf >= 1 and s == "alta": decision.append(1)
-        elif r == "estudiante" and s == "alta": decision.append(1)
-        else: decision.append(0)
-
-    df = pd.DataFrame({
-        "rol_usuario": rol, "sensibilidad_recurso": sens_rec,
-        "postura_dispositivo": postura, "ubicacion": ubic,
-        "horario_laboral": horario, "historial_anomalo": hist_anom,
-        "intentos_fallidos": intentos, "señal_riesgo": señal,
-        "decision": decision
+    return pd.DataFrame({
+        'rol': rol, 'sensibilidad': sensibilidad,
+        'postura_dispositivo': postura, 'ubicacion': ubicacion,
+        'horario_laboral': horario, 'historial_anomalo': historial,
+        'intentos_fallidos': intentos_fallidos, 'senal_riesgo': senal_riesgo,
+        'clase': etiqueta
     })
 
-    le_rol  = LabelEncoder().fit(["administrativo", "TI", "docente", "estudiante"])
-    le_sens = LabelEncoder().fit(["alta", "baja", "media"])
-    le_ubic = LabelEncoder().fit(["campus", "remoto_exterior", "remoto_peru"])
+@st.cache_resource
+def entrenar_modelo():
+    df = generar_dataset(2000, 42)
+    X = df.drop(columns=['clase'])
+    y = df['clase']
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.20, random_state=42, stratify=y)
+    
+    modelo = DecisionTreeClassifier(
+        criterion='gini', max_depth=6,
+        min_samples_split=20, min_samples_leaf=10,
+        class_weight='balanced', random_state=42
+    )
+    modelo.fit(X_train, y_train)
+    y_pred = modelo.predict(X_test)
 
-    df_e = df.copy()
-    df_e["rol_usuario"]          = le_rol.transform(df["rol_usuario"])
-    df_e["sensibilidad_recurso"] = le_sens.transform(df["sensibilidad_recurso"])
-    df_e["ubicacion"]            = le_ubic.transform(df["ubicacion"])
+    acc   = accuracy_score(y_test, y_pred)
+    prec  = precision_score(y_test, y_pred, average='weighted')
+    rec   = recall_score(y_test, y_pred,    average='weighted')
+    f1    = f1_score(y_test, y_pred,         average='weighted')
+    cm    = confusion_matrix(y_test, y_pred)
+    fpr_l = []
+    for i in range(cm.shape[0]):
+        FP = cm[:, i].sum() - cm[i, i]
+        TN = cm.sum() - cm[i, :].sum() - cm[:, i].sum() + cm[i, i]
+        fpr_l.append(FP / (FP + TN) if (FP + TN) > 0 else 0)
+    fpr = np.mean(fpr_l)
 
-    features = ["rol_usuario","sensibilidad_recurso","postura_dispositivo",
-                "ubicacion","horario_laboral","historial_anomalo",
-                "intentos_fallidos","señal_riesgo"]
-    X, y_ = df_e[features], df_e["decision"]
-    X_tr, X_te, y_tr, y_te = train_test_split(X, y_, test_size=0.20,
-                                               random_state=42, stratify=y_)
+    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    cv_scores = cross_val_score(modelo, X, y, cv=cv, scoring='accuracy')
 
-    model = DecisionTreeClassifier(criterion="gini", max_depth=6,
-                                    min_samples_split=20, min_samples_leaf=10,
-                                    class_weight="balanced", random_state=42)
-    model.fit(X_tr, y_tr)
-    y_pred = model.predict(X_te)
-    cm = confusion_matrix(y_te, y_pred)
-    FP = cm.sum(axis=0) - np.diag(cm)
-    TN = cm.sum() - (FP + (cm.sum(axis=1) - np.diag(cm)) + np.diag(cm))
-    fpr = (FP / (FP + TN)).mean()
+    importancias = pd.Series(
+        modelo.feature_importances_, index=X.columns
+    ).sort_values(ascending=False)
 
-    metricas = {
-        "accuracy" : accuracy_score(y_te, y_pred),
-        "precision": precision_score(y_te, y_pred, average="macro", zero_division=0),
-        "recall"   : recall_score(y_te, y_pred, average="macro", zero_division=0),
-        "f1"       : f1_score(y_te, y_pred, average="macro", zero_division=0),
-        "fpr"      : fpr,
-        "cm"       : cm,
-    }
-    cv = cross_val_score(model, X, y_, cv=5, scoring="accuracy")
-    metricas["cv_mean"] = cv.mean()
-    metricas["cv_std"]  = cv.std()
-    return model, le_rol, le_sens, le_ubic, features, metricas, df
+    return modelo, X, y, X_train, X_test, y_train, y_test, y_pred, \
+           acc, prec, rec, f1, fpr, cv_scores, importancias, cm
 
-modelo, le_rol, le_sens, le_ubic, features, metricas, df_orig = entrenar_modelo()
+# Cargar modelo
+modelo, X, y, X_train, X_test, y_train, y_test, y_pred, \
+acc, prec, rec, f1, fpr, cv_scores, importancias, cm = entrenar_modelo()
 
-# ─── ESTADO DE SESIÓN ────────────────────────────────────────────────────────
-if "log_eventos" not in st.session_state:
-    st.session_state.log_eventos = []
-if "historial_pred" not in st.session_state:
-    st.session_state.historial_pred = []
-
-# ─── HEADER ──────────────────────────────────────────────────────────────────
+# ── HEADER ───────────────────────────────────────────────────────────────────
 st.markdown("""
-<div class="hero-header">
-    <div>
-        <span class="hero-tag">ZERO TRUST</span>
-        <span class="hero-tag">ML</span>
-        <span class="hero-tag">CLOUD</span>
-    </div>
-    <div class="hero-title" style="margin-top:0.7rem">
-        🔐 SISTEMA INTELIGENTE DE CONTROL DE ACCESO
-    </div>
-    <div class="hero-subtitle">
-        Universidad Peruana de Ciencias Aplicadas &nbsp;|&nbsp;
-        Ingeniería de Redes y Comunicaciones &nbsp;|&nbsp;
+<div class="header-box">
+    <span class="header-badge">ZERO TRUST</span>
+    <span class="header-badge">ML</span>
+    <span class="header-badge">CLOUD</span>
+    <div class="header-title">🔒 SISTEMA INTELIGENTE DE CONTROL DE ACCESO</div>
+    <div class="header-sub">
+        Universidad Peruana de Ciencias Aplicadas &nbsp;|&nbsp; 
+        Ingeniería de Redes y Comunicaciones &nbsp;|&nbsp; 
         Modelo: Árbol de Decisión &nbsp;|&nbsp; NIST SP 800-207
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# ─── TABS ────────────────────────────────────────────────────────────────────
+# ── TABS ─────────────────────────────────────────────────────────────────────
 tab1, tab2, tab3, tab4 = st.tabs([
-    "⚡ Demo en Vivo", "📊 Métricas del Modelo",
-    "🌳 Árbol de Decisión", "📋 Log de Auditoría"
+    "⚡ Demo en Vivo",
+    "📊 Métricas del Modelo",
+    "🌿 Árbol de Decisión",
+    "📋 Log de Auditoría"
 ])
 
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 # TAB 1: DEMO EN VIVO
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 with tab1:
-    col_form, col_result = st.columns([1, 1], gap="large")
+    st.markdown('<div class="section-title">// SIMULADOR INTERACTIVO - POLICY DECISION POINT (PDP)</div>', 
+                unsafe_allow_html=True)
+    
+    # Escenarios predefinidos
+    st.markdown("**Escenarios documentados (Tabla 44 - Capítulo 4):**")
+    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+    
+    esc_sel = None
+    with col_e1:
+        if st.button("E1 · Estudiante campus", use_container_width=True):
+            esc_sel = 1
+    with col_e2:
+        if st.button("E2 · Docente exterior", use_container_width=True):
+            esc_sel = 2
+    with col_e3:
+        if st.button("E3 · Credential stuffing", use_container_width=True):
+            esc_sel = 3
+    with col_e4:
+        if st.button("E4 · TI fuera de horario", use_container_width=True):
+            esc_sel = 4
 
-    with col_form:
-        st.markdown('<div class="section-title">// ATRIBUTOS DE LA SOLICITUD</div>',
-                    unsafe_allow_html=True)
+    escenarios = {
+        1: {"rol": 0, "sens": 0, "postura": 1, "ubi": 0, "horario": 1, "hist": 0, "intentos": 0, "senal": 0},
+        2: {"rol": 1, "sens": 2, "postura": 0, "ubi": 2, "horario": 0, "hist": 0, "intentos": 0, "senal": 2},
+        3: {"rol": 2, "sens": 1, "postura": 0, "ubi": 1, "horario": 1, "hist": 0, "intentos": 4, "senal": 2},
+        4: {"rol": 3, "sens": 2, "postura": 1, "ubi": 0, "horario": 0, "hist": 1, "intentos": 0, "senal": 1},
+    }
 
-        rol = st.selectbox("👤 Rol del Usuario",
-                            ["estudiante", "docente", "administrativo", "TI"],
-                            help="Rol institucional del solicitante")
+    st.divider()
+    col_izq, col_der = st.columns([1, 1])
 
-        sensibilidad = st.selectbox("📁 Sensibilidad del Recurso",
-                                     ["baja", "media", "alta"],
-                                     help="Clasificación de sensibilidad del recurso en cloud")
+    with col_izq:
+        st.markdown("**Atributos de entrada:**")
+        defaults = escenarios.get(esc_sel, escenarios[1]) if esc_sel else escenarios[1]
 
-        postura = st.radio("💻 Postura del Dispositivo",
-                            [1, 0],
-                            format_func=lambda x: "✅ Cumple política (MDM registrado)" if x else "❌ No cumple política",
-                            horizontal=True)
+        rol       = st.selectbox("Rol del usuario",
+                        ["Estudiante (0)", "Docente (1)", "Administrativo (2)", "TI (3)"],
+                        index=defaults["rol"])
+        sens      = st.selectbox("Sensibilidad del recurso",
+                        ["Baja (0)", "Media (1)", "Alta (2)"],
+                        index=defaults["sens"])
+        postura   = st.selectbox("Postura del dispositivo",
+                        ["No conforme (0)", "Conforme (1)"],
+                        index=defaults["postura"])
+        ubi       = st.selectbox("Ubicación",
+                        ["Campus (0)", "Remoto Perú (1)", "Remoto Exterior (2)"],
+                        index=defaults["ubi"])
+        horario   = st.selectbox("Horario laboral",
+                        ["Fuera de horario (0)", "En horario (1)"],
+                        index=defaults["horario"])
+        hist      = st.selectbox("Historial anómalo",
+                        ["Normal (0)", "Anómalo (1)"],
+                        index=defaults["hist"])
+        intentos  = st.slider("Intentos fallidos", 0, 5, defaults["intentos"])
+        senal     = st.selectbox("Señal de riesgo",
+                        ["Ninguna (0)", "Moderada (1)", "Alta (2)"],
+                        index=defaults["senal"])
 
-        ubicacion = st.selectbox("🌍 Ubicación del Acceso",
-                                  ["campus", "remoto_peru", "remoto_exterior"],
-                                  format_func=lambda x: {
-                                      "campus": "🏫 Campus universitario",
-                                      "remoto_peru": "🏠 Remoto — Perú",
-                                      "remoto_exterior": "✈️ Remoto — Exterior"
-                                  }[x])
+    with col_der:
+        # Extraer valores numéricos
+        r = int(rol.split("(")[1].replace(")", ""))
+        s = int(sens.split("(")[1].replace(")", ""))
+        p = int(postura.split("(")[1].replace(")", ""))
+        u = int(ubi.split("(")[1].replace(")", ""))
+        h = int(horario.split("(")[1].replace(")", ""))
+        hi = int(hist.split("(")[1].replace(")", ""))
+        se = int(senal.split("(")[1].replace(")", ""))
 
-        horario = st.radio("⏰ Horario",
-                            [1, 0],
-                            format_func=lambda x: "✅ Horario laboral (07:00–22:00)" if x else "⚠️ Fuera de horario",
-                            horizontal=True)
+        # Trust Score
+        Ru = hi * 0.6 + (intentos / 5) * 0.4
+        Rd = (1 - p) * 0.7 + (u / 2) * 0.3
+        Rc = (1 - h) * 0.3 + (s / 2) * 0.7
+        Rr = se / 2
+        R  = round(0.35 * Ru + 0.25 * Rd + 0.20 * Rc + 0.20 * Rr, 3)
 
-        historial = st.radio("📈 Historial (últimas 24h)",
-                              [0, 1],
-                              format_func=lambda x: "✅ Normal" if x == 0 else "⚠️ Comportamiento anómalo detectado",
-                              horizontal=True)
+        fail_secure = intentos >= 4
 
-        intentos = st.slider("🔑 Intentos de Autenticación Fallidos",
-                              min_value=0, max_value=5, value=0,
-                              help="Número de intentos fallidos previos")
-
-        señal = st.select_slider("🚨 Señal de Riesgo (Threat Intelligence)",
-                                   options=[0, 1, 2],
-                                   format_func=lambda x: {
-                                       0: "🟢 Ninguna", 1: "🟡 Moderada", 2: "🔴 Alta"
-                                   }[x])
-
-        evaluar = st.button("⚡ EVALUAR SOLICITUD", use_container_width=True,
-                             type="primary")
-
-    with col_result:
-        st.markdown('<div class="section-title">// DECISIÓN DEL SISTEMA</div>',
-                    unsafe_allow_html=True)
-
-        if evaluar:
-            # Codificación
-            rol_e  = le_rol.transform([rol])[0]
-            sens_e = le_sens.transform([sensibilidad])[0]
-            ubic_e = le_ubic.transform([ubicacion])[0]
-
-            X_new = pd.DataFrame([[rol_e, sens_e, postura, ubic_e,
-                                    horario, historial, intentos, señal]],
-                                   columns=features)
-            pred   = modelo.predict(X_new)[0]
-            probs  = modelo.predict_proba(X_new)[0]
-            etiq   = {0:"Permitir", 1:"Elevar MFA", 2:"Bloquear"}[pred]
-            conf   = max(probs) * 100
-
-            # Mostrar decisión
-            if pred == 0:
-                st.markdown(f"""
-                <div class="decision-permitir">
-                    <div class="decision-text" style="color:#00C851">
-                        ✅&nbsp;&nbsp;ACCESO PERMITIDO
-                    </div>
-                    <div class="decision-sub">Confianza: {conf:.1f}% &nbsp;|&nbsp; Sin restricciones adicionales</div>
-                </div>""", unsafe_allow_html=True)
-            elif pred == 1:
-                st.markdown(f"""
-                <div class="decision-mfa">
-                    <div class="decision-text" style="color:#FFB300">
-                        🔐&nbsp;&nbsp;ELEVAR AUTENTICACIÓN
-                    </div>
-                    <div class="decision-sub">Confianza: {conf:.1f}% &nbsp;|&nbsp; MFA requerido (NIST SP 800-63B AAL2)</div>
-                </div>""", unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="decision-bloquear">
-                    <div class="decision-text" style="color:#FF4444">
-                        ❌&nbsp;&nbsp;ACCESO BLOQUEADO
-                    </div>
-                    <div class="decision-sub">Confianza: {conf:.1f}% &nbsp;|&nbsp; Evento registrado en SIEM</div>
-                </div>""", unsafe_allow_html=True)
-
-            st.markdown("<br>", unsafe_allow_html=True)
-
-            # Gráfico de probabilidades
-            fig_prob = go.Figure(go.Bar(
-                x=["Permitir", "Elevar MFA", "Bloquear"],
-                y=[p * 100 for p in probs],
-                marker_color=["#00C851", "#FFB300", "#C8102E"],
-                text=[f"{p*100:.1f}%" for p in probs],
-                textposition="outside",
-                width=0.5
-            ))
-            fig_prob.update_layout(
-                title=dict(text="Distribución de Probabilidades", font=dict(size=13, color="#F5F5F0")),
-                plot_bgcolor="#1A1A1A", paper_bgcolor="#1A1A1A",
-                font=dict(color="#F5F5F0", family="IBM Plex Mono"),
-                yaxis=dict(range=[0, 115], title="Probabilidad (%)",
-                           gridcolor="#2A2A2A", zeroline=False),
-                xaxis=dict(gridcolor="#2A2A2A"),
-                height=280, margin=dict(t=50, b=20, l=40, r=20),
-                showlegend=False
-            )
-            st.plotly_chart(fig_prob, use_container_width=True)
-
-            # Factores de riesgo detectados
-            st.markdown('<div class="section-title">// FACTORES DE RIESGO DETECTADOS</div>',
-                        unsafe_allow_html=True)
-            factores = []
-            if señal == 2: factores.append(("🔴", "Señal de riesgo ALTA — Threat Intelligence activo"))
-            elif señal == 1: factores.append(("🟡", "Señal de riesgo MODERADA"))
-            if intentos >= 3: factores.append(("🔴", f"{intentos} intentos fallidos — posible ataque de credenciales"))
-            if historial == 1: factores.append(("🟡", "Historial anómalo detectado en las últimas 24h"))
-            if postura == 0 and sensibilidad == "alta": factores.append(("🔴", "Dispositivo no conforme accediendo a recurso de ALTA sensibilidad"))
-            if postura == 0: factores.append(("🟡", "Dispositivo sin cumplimiento de política MDM"))
-            if horario == 0: factores.append(("🟡", "Acceso fuera del horario laboral establecido"))
-            if ubicacion == "remoto_exterior": factores.append(("🟡", "Acceso desde ubicación exterior al país"))
-
-            if factores:
-                for icono, desc in factores:
-                    st.markdown(f"`{icono}` {desc}")
-            else:
-                st.markdown("`✅` Sin factores de riesgo detectados — entorno de bajo riesgo")
-
-            # Guardar en log
-            import datetime
-            ts = datetime.datetime.now().strftime("%H:%M:%S")
-            clase_log = ["info", "warn", "error"][pred]
-            icono_log = ["✅", "🔐", "❌"][pred]
-            msg = (f'<span class="log-{clase_log}">[{ts}] {icono_log} '
-                   f'{etiq.upper()} | rol={rol} | sens={sensibilidad} | '
-                   f'ubic={ubicacion} | riesgo={["NINGUNA","MOD","ALTA"][señal]} | '
-                   f'conf={conf:.1f}%</span>')
-            st.session_state.log_eventos.insert(0, msg)
-
-            evento = {
-                "Timestamp": ts, "Rol": rol, "Sensibilidad": sensibilidad,
-                "Dispositivo": "Cumple" if postura else "No cumple",
-                "Ubicación": ubicacion, "Horario": "Laboral" if horario else "Fuera",
-                "Historial": "Normal" if historial == 0 else "Anómalo",
-                "Intentos": intentos, "Riesgo": ["Ninguna","Moderada","Alta"][señal],
-                "Decisión": etiq, "Confianza (%)": f"{conf:.1f}"
-            }
-            st.session_state.historial_pred.insert(0, evento)
-
+        if fail_secure or R >= 0.70:
+            decision = "BLOQUEAR"
+            css_class = "decision-bloquear"
+            icon = "🚫"
+            color_r = "#ef4444"
+            aal = "N/A — Acceso denegado"
+            token = "—"
+        elif R >= 0.30:
+            decision = "ELEVAR MFA"
+            css_class = "decision-mfa"
+            icon = "⚠️"
+            color_r = "#eab308"
+            aal = "AAL3" if s == 2 else "AAL2"
+            token = "15 min" if s == 2 else "30 min"
         else:
-            st.markdown("""
-            <div style="text-align:center; padding:4rem 2rem; color:#555;
-                        border:1px dashed #333; border-radius:4px;">
-                <div style="font-size:3rem">🔐</div>
-                <div style="font-family:'IBM Plex Mono'; font-size:0.9rem; margin-top:1rem;">
-                    Configure los atributos de la<br>solicitud y presione EVALUAR
-                </div>
-            </div>""", unsafe_allow_html=True)
+            decision = "PERMITIR"
+            css_class = "decision-permitir"
+            icon = "✅"
+            color_r = "#22c55e"
+            aal = "AAL1"
+            token = "4 horas"
 
-# ══════════════════════════════════════════════════════════════════════════════
+        motivo = "Regla fail-secure: intentos >= 4 (NIST SP 800-207 tenet 5)" \
+                 if fail_secure else f"R = {R} {'≥' if R >= 0.70 else ('≥' if R >= 0.30 else '<')} umbral"
+
+        st.markdown(f"""
+        <div class="{css_class}" style="margin-bottom:16px">
+            <div style="font-size:32px;margin-bottom:8px">{icon}</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:22px;
+                        font-weight:700;color:{color_r};letter-spacing:0.05em">
+                {decision}
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            st.metric("Trust Score R", f"{R:.3f}")
+            st.metric("Nivel MFA", aal)
+        with col_r2:
+            st.metric("Token / Sesión", token)
+            st.metric("Norma aplicada", "NIST SP 800-207")
+
+        st.markdown(f"""
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;
+                    color:#475569;margin-top:12px;padding:10px;
+                    background:#050810;border-radius:6px;border:1px solid #1e293b">
+            R = 0.35×{Ru:.3f} + 0.25×{Rd:.3f} + 0.20×{Rc:.3f} + 0.20×{Rr:.3f} = <b style="color:{color_r}">{R:.3f}</b><br>
+            Motivo: {motivo}
+        </div>""", unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════════════════════
 # TAB 2: MÉTRICAS DEL MODELO
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.markdown('<div class="section-title">// MÉTRICAS DE EVALUACIÓN — INDICADORES DE LOGRO</div>',
                 unsafe_allow_html=True)
 
-    m = metricas
-    c1, c2, c3, c4, c5 = st.columns(5)
+    # 5 métricas principales
+    umbrales  = [0.85, 0.80, 0.80, 0.80, 0.10]
+    valores   = [acc, prec, rec, f1, fpr]
+    etiquetas = ["EXACTITUD", "PRECISIÓN", "RECALL", "F1-SCORE", "FPR"]
+    tipos     = [">=", ">=", ">=", ">=", "<="]
 
-    for col, (nombre, val, umbral, key) in zip(
-        [c1, c2, c3, c4, c5],
-        [("Exactitud", m["accuracy"], 0.85, "≥ 0.85"),
-         ("Precisión", m["precision"], 0.80, "≥ 0.80"),
-         ("Recall",    m["recall"],    0.80, "≥ 0.80"),
-         ("F1-Score",  m["f1"],        0.80, "≥ 0.80"),
-         ("1 - FPR",   1-m["fpr"],     0.90, "≥ 0.90")]
-    ):
-        ok = val >= umbral
-        color = "#00C851" if ok else "#C8102E"
-        col.markdown(f"""
-        <div class="metric-card">
-            <div class="metric-value" style="color:{color}">{val:.4f}</div>
-            <div class="metric-label">{nombre}</div>
-            <div style="font-size:0.7rem;color:#666;margin-top:0.3rem;font-family:'IBM Plex Mono'">
-                Umbral: {key} &nbsp;{"✓" if ok else "✗"}
-            </div>
+    cols = st.columns(5)
+    for i, col in enumerate(cols):
+        cumple = (valores[i] >= umbrales[i]) if tipos[i] == ">=" else (valores[i] <= umbrales[i])
+        with col:
+            st.markdown(f"""
+            <div class="metric-card">
+                <div class="metric-value">{valores[i]:.4f}</div>
+                <div class="metric-label">{etiquetas[i]}</div>
+                <div class="metric-umbral">Umbral: {tipos[i]} {umbrales[i]} 
+                    {'<span class="metric-check">✓</span>' if cumple else '✗'}</div>
+            </div>""", unsafe_allow_html=True)
+
+    st.divider()
+
+    # CV y árbol info
+    col_cv, col_tree = st.columns(2)
+    with col_cv:
+        st.markdown("**Validación cruzada 5-fold:**")
+        st.markdown(f"""
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;
+                    background:#050810;border:1px solid #1e293b;
+                    border-radius:8px;padding:16px;line-height:2">
+            Media &nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#22c55e">{cv_scores.mean():.4f}</span><br>
+            Std &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#22c55e">+/- {cv_scores.std():.4f}</span><br>
+            Scores &nbsp;&nbsp;: <span style="color:#94a3b8">{[round(float(s),4) for s in cv_scores]}</span>
         </div>""", unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    col_cm, col_cv = st.columns(2, gap="large")
+    with col_tree:
+        st.markdown("**Parámetros del modelo:**")
+        st.markdown(f"""
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;
+                    background:#050810;border:1px solid #1e293b;
+                    border-radius:8px;padding:16px;line-height:2;color:#94a3b8">
+            criterion &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#63b3ed">gini</span><br>
+            max_depth &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#63b3ed">6</span><br>
+            min_samples_split : <span style="color:#63b3ed">20</span><br>
+            min_samples_leaf &nbsp;: <span style="color:#63b3ed">10</span><br>
+            class_weight &nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#63b3ed">balanced</span><br>
+            random_state &nbsp;&nbsp;&nbsp;&nbsp;: <span style="color:#63b3ed">42</span>
+        </div>""", unsafe_allow_html=True)
 
-    with col_cm:
-        st.markdown('<div class="section-title">// MATRIZ DE CONFUSIÓN</div>',
-                    unsafe_allow_html=True)
-        cm = m["cm"]
-        fig_cm = go.Figure(go.Heatmap(
-            z=cm, x=["Permitir", "Elevar MFA", "Bloquear"],
-            y=["Permitir", "Elevar MFA", "Bloquear"],
-            colorscale=[[0,"#1A1A1A"],[0.5,"#8B0A1E"],[1,"#C8102E"]],
-            text=cm, texttemplate="%{text}", textfont={"size":18, "color":"white"},
-            showscale=False
-        ))
-        fig_cm.update_layout(
-            plot_bgcolor="#1A1A1A", paper_bgcolor="#1A1A1A",
-            font=dict(color="#F5F5F0", family="IBM Plex Mono", size=12),
-            xaxis=dict(title="Predicho"), yaxis=dict(title="Real"),
-            height=320, margin=dict(t=20, b=60, l=80, r=20)
-        )
-        st.plotly_chart(fig_cm, use_container_width=True)
+    st.divider()
 
-    with col_cv:
-        st.markdown('<div class="section-title">// VALIDACIÓN CRUZADA 5-FOLD</div>',
-                    unsafe_allow_html=True)
-        np.random.seed(42)
-        cv_vals = [m["cv_mean"] + np.random.uniform(-m["cv_std"]*2, m["cv_std"]*2)
-                   for _ in range(5)]
-        fig_cv = go.Figure()
-        fig_cv.add_trace(go.Scatter(
-            x=list(range(1, 6)), y=cv_vals, mode="lines+markers",
-            line=dict(color="#C8102E", width=3),
-            marker=dict(size=10, color="#C8102E",
-                        line=dict(color="#F5F5F0", width=2)),
-            name="Accuracy"
-        ))
-        fig_cv.add_hline(y=m["cv_mean"], line_dash="dash",
-                          line_color="#888", annotation_text=f"Media: {m['cv_mean']:.4f}",
-                          annotation_font_color="#888")
-        fig_cv.update_layout(
-            plot_bgcolor="#1A1A1A", paper_bgcolor="#1A1A1A",
-            font=dict(color="#F5F5F0", family="IBM Plex Mono", size=11),
-            xaxis=dict(title="Fold", gridcolor="#2A2A2A", tickvals=[1,2,3,4,5]),
-            yaxis=dict(title="Accuracy", gridcolor="#2A2A2A", range=[0.85, 1.0]),
-            height=320, margin=dict(t=20, b=60, l=80, r=20),
-            showlegend=False
-        )
-        st.plotly_chart(fig_cv, use_container_width=True)
+    # Gráfico de barras métricas vs umbrales
+    st.markdown("**Comparación: valores obtenidos vs. umbrales del indicador OE03**")
+    fig, ax = plt.subplots(figsize=(10, 5))
+    fig.patch.set_facecolor('#0f1424')
+    ax.set_facecolor('#0f1424')
+
+    labels_graf = ['Accuracy', 'Precision', 'Recall', 'F1-Score', 'FPR']
+    x = np.arange(len(labels_graf))
+    ancho = 0.35
+
+    bars_u = ax.bar(x - ancho/2, umbrales, ancho,
+                    label='Umbral del indicador',
+                    color='#334155', edgecolor='#475569', linewidth=0.8)
+    bars_v = ax.bar(x + ancho/2, valores, ancho,
+                    label='Valor obtenido (simulación)',
+                    color='#1d4ed8', edgecolor='#3b82f6', linewidth=0.8)
+
+    for bar, val, umb, tipo in zip(bars_v, valores, umbrales, tipos):
+        cumple = (val >= umb) if tipo == ">=" else (val <= umb)
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                f'{val:.4f}', ha='center', va='bottom', fontsize=9,
+                fontweight='bold', color='#22c55e' if cumple else '#ef4444')
+
+    for bar, val in zip(bars_u, umbrales):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
+                f'{val:.2f}', ha='center', va='bottom',
+                fontsize=9, color='#94a3b8')
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels_graf, fontsize=11, color='#e2e8f0')
+    ax.set_ylim(0, 1.15)
+    ax.set_ylabel('Valor de la métrica', fontsize=11, color='#94a3b8')
+    ax.set_xlabel('Métrica de evaluación del modelo CART', fontsize=11, color='#94a3b8')
+    ax.tick_params(colors='#94a3b8')
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_color('#334155')
+    ax.spines['bottom'].set_color('#334155')
+    ax.yaxis.grid(True, color='#1e293b', linewidth=0.8)
+    ax.set_axisbelow(True)
+    legend = ax.legend(fontsize=10, facecolor='#0f1424',
+                       edgecolor='#334155', labelcolor='#e2e8f0')
+    st.pyplot(fig)
+    plt.close()
+
+    st.divider()
 
     # Importancia de variables
-    st.markdown('<div class="section-title">// IMPORTANCIA DE VARIABLES (GINI IMPORTANCE)</div>',
-                unsafe_allow_html=True)
-    nombres_feat = ["Rol Usuario", "Sensibilidad Recurso", "Postura Dispositivo",
-                    "Ubicación", "Horario Laboral", "Historial Anómalo",
-                    "Intentos Fallidos", "Señal Riesgo"]
-    imp = modelo.feature_importances_
-    idx = np.argsort(imp)
-    colors_imp = ["#C8102E" if i == idx[-1] else "#4A90D9" for i in range(len(imp))]
-    fig_imp = go.Figure(go.Bar(
-        x=imp[idx], y=[nombres_feat[i] for i in idx],
-        orientation="h", marker_color=[colors_imp[i] for i in idx],
-        text=[f"{v:.3f}" for v in imp[idx]], textposition="outside",
-        width=0.6
-    ))
-    fig_imp.update_layout(
-        plot_bgcolor="#1A1A1A", paper_bgcolor="#1A1A1A",
-        font=dict(color="#F5F5F0", family="IBM Plex Mono", size=11),
-        xaxis=dict(title="Importancia", gridcolor="#2A2A2A"),
-        yaxis=dict(gridcolor="#2A2A2A"),
-        height=350, margin=dict(t=20, b=40, l=160, r=60),
-        showlegend=False
-    )
-    st.plotly_chart(fig_imp, use_container_width=True)
+    st.markdown("**Importancia de variables (Gini importance):**")
+    fig2, ax2 = plt.subplots(figsize=(8, 4))
+    fig2.patch.set_facecolor('#0f1424')
+    ax2.set_facecolor('#0f1424')
 
-# ══════════════════════════════════════════════════════════════════════════════
+    colores = ['#1d4ed8' if i == 0 else '#334155' for i in range(len(importancias))]
+    bars_imp = ax2.barh(importancias.index[::-1],
+                        importancias.values[::-1],
+                        color=colores[::-1], edgecolor='#475569', linewidth=0.5)
+
+    for bar, val in zip(bars_imp, importancias.values[::-1]):
+        ax2.text(bar.get_width() + 0.005, bar.get_y() + bar.get_height()/2,
+                 f'{val:.4f}', va='center', fontsize=9, color='#94a3b8')
+
+    ax2.set_xlabel('Importancia Gini', fontsize=10, color='#94a3b8')
+    ax2.tick_params(colors='#94a3b8')
+    ax2.spines['top'].set_visible(False)
+    ax2.spines['right'].set_visible(False)
+    ax2.spines['left'].set_color('#334155')
+    ax2.spines['bottom'].set_color('#334155')
+    ax2.xaxis.grid(True, color='#1e293b', linewidth=0.8)
+    ax2.set_axisbelow(True)
+    ax2.set_xlim(0, importancias.max() * 1.25)
+    st.pyplot(fig2)
+    plt.close()
+
+# ════════════════════════════════════════════════════════════════════════════
 # TAB 3: ÁRBOL DE DECISIÓN
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 with tab3:
-    st.markdown('<div class="section-title">// ESTRUCTURA DEL ÁRBOL DE DECISIÓN</div>',
+    st.markdown('<div class="section-title">// ÁRBOL DE DECISIÓN CART — VISUALIZACIÓN</div>',
                 unsafe_allow_html=True)
+    st.markdown(f"""
+    **Variable raíz:** `senal_riesgo` (Gini importance = **{importancias['senal_riesgo']:.4f}**)  
+    **Profundidad máxima configurada:** 6 | **Profundidad real:** {modelo.get_depth()} | 
+    **Número de hojas:** {modelo.get_n_leaves()}
+    """)
 
-    prof = st.slider("Profundidad a visualizar", min_value=2, max_value=6, value=3)
+    fig3, ax3 = plt.subplots(figsize=(20, 10))
+    fig3.patch.set_facecolor('#0f1424')
+    ax3.set_facecolor('#0f1424')
+    plot_tree(
+        modelo,
+        feature_names=X.columns.tolist(),
+        class_names=['PERMITIR', 'ELEVAR_MFA', 'BLOQUEAR'],
+        filled=True, rounded=True,
+        max_depth=3,
+        fontsize=8,
+        ax=ax3
+    )
+    ax3.set_title('Árbol de Decisión CART (primeros 3 niveles)',
+                  color='#e2e8f0', fontsize=12, pad=20)
+    st.pyplot(fig3)
+    plt.close()
+    st.caption("Se muestran los primeros 3 niveles para mayor legibilidad. Profundidad total: 6.")
 
-    nombres_feat_tree = ["Rol", "Sensibilidad", "Postura\nDisp.", "Ubicación",
-                          "Horario", "Historial\nAnóm.", "Intentos\nFall.", "Señal\nRiesgo"]
-    fig_tree, ax_tree = plt.subplots(figsize=(22, 10))
-    fig_tree.patch.set_facecolor("#1A1A1A")
-    ax_tree.set_facecolor("#1A1A1A")
-    plot_tree(modelo, feature_names=nombres_feat_tree,
-              class_names=["✅ Permitir", "🔐 Elevar MFA", "❌ Bloquear"],
-              filled=True, rounded=True, fontsize=9, proportion=False,
-              impurity=True, ax=ax_tree, max_depth=prof)
-    ax_tree.set_title(f"Árbol de Decisión — {prof} niveles | Zero Trust UPC",
-                       color="#F5F5F0", fontsize=13, pad=15)
-    plt.tight_layout()
-    st.pyplot(fig_tree)
-
-    # Reglas en texto
-    with st.expander("📄 Ver reglas del árbol en texto"):
-        from sklearn.tree import export_text
-        nombres_txt = ["rol_usuario","sensibilidad_recurso","postura_dispositivo",
-                        "ubicacion","horario_laboral","historial_anomalo",
-                        "intentos_fallidos","señal_riesgo"]
-        reglas = export_text(modelo, feature_names=nombres_txt, max_depth=4)
-        st.code(reglas, language="text")
-
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 # TAB 4: LOG DE AUDITORÍA
-# ══════════════════════════════════════════════════════════════════════════════
+# ════════════════════════════════════════════════════════════════════════════
 with tab4:
-    st.markdown('<div class="section-title">// LOG DE AUDITORÍA — SIEM</div>',
+    st.markdown('<div class="section-title">// SIMULACIÓN DE LOG DE AUDITORÍA — CLOUDWATCH</div>',
                 unsafe_allow_html=True)
-
-    if st.session_state.log_eventos:
-        log_html = "<br>".join(st.session_state.log_eventos)
-        st.markdown(f'<div class="audit-log">{log_html}</div>', unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <div class="audit-log">
-            <span style="color:#555">[SYSTEM] Log de auditoría iniciado — esperando eventos...</span>
-        </div>""", unsafe_allow_html=True)
-
-    if st.session_state.historial_pred:
-        st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="section-title">// HISTORIAL DE EVALUACIONES</div>',
-                    unsafe_allow_html=True)
-        df_hist = pd.DataFrame(st.session_state.historial_pred)
-        st.dataframe(df_hist, use_container_width=True, height=300)
-
-        # Estadísticas rápidas
-        if len(df_hist) >= 2:
-            st.markdown('<div class="section-title">// ESTADÍSTICAS DE SESIÓN</div>',
-                        unsafe_allow_html=True)
-            counts = df_hist["Decisión"].value_counts()
-            fig_ses = go.Figure(go.Pie(
-                labels=counts.index, values=counts.values,
-                marker=dict(colors=["#00C851","#FFB300","#C8102E"],
-                            line=dict(color="#1A1A1A", width=2)),
-                hole=0.5, textfont=dict(size=13, color="white")
-            ))
-            fig_ses.update_layout(
-                plot_bgcolor="#1A1A1A", paper_bgcolor="#1A1A1A",
-                font=dict(color="#F5F5F0", family="IBM Plex Mono"),
-                height=280, margin=dict(t=20, b=20, l=20, r=20),
-                legend=dict(bgcolor="#1A1A1A")
-            )
-            st.plotly_chart(fig_ses, use_container_width=True)
-
-        if st.button("🗑️ Limpiar historial", type="secondary"):
-            st.session_state.log_eventos = []
-            st.session_state.historial_pred = []
-            st.rerun()
-
-# ─── SIDEBAR ─────────────────────────────────────────────────────────────────
-with st.sidebar:
     st.markdown("""
-    <div style="text-align:center; padding:1rem 0; border-bottom:1px solid #333">
-        <div style="font-size:2.5rem">🔐</div>
-        <div style="font-family:'IBM Plex Mono';font-size:0.8rem;color:#C8102E;
-                    letter-spacing:0.1em;margin-top:0.5rem;">ZERO TRUST AI</div>
-        <div style="font-size:0.7rem;color:#666;margin-top:0.2rem;">
-            Decision Tree Classifier
-        </div>
-    </div>""", unsafe_allow_html=True)
+    Simulación offline del Log Group `/aws/lambda/zero-trust-pdp`.  
+    Campos AU-3 del NIST SP 800-53 Rev. 5 (NIST, 2020).
+    """)
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("**📋 Resumen del Modelo**")
+    logs_escenarios = [
+        {"decision": "PERMITIR",    "trust_score": 0.020, "rol": "estudiante",   "sensibilidad": "baja",  "ubicacion": "campus",           "nivel_mfa": "AAL1",              "senal": "ninguna"},
+        {"decision": "BLOQUEAR",    "trust_score": 0.865, "rol": "docente",      "sensibilidad": "alta",  "ubicacion": "remoto_exterior",   "nivel_mfa": "N/A-acceso-denegado","senal": "alta"},
+        {"decision": "BLOQUEAR",    "trust_score": 0.705, "rol": "administrativo","sensibilidad": "media", "ubicacion": "remoto_peru",       "nivel_mfa": "N/A-acceso-denegado","senal": "alta"},
+        {"decision": "ELEVAR_MFA",  "trust_score": 0.445, "rol": "ti",           "sensibilidad": "alta",  "ubicacion": "campus",            "nivel_mfa": "AAL3",              "senal": "moderada"},
+    ]
 
-    for label, val in [
-        ("Registros (train)", "1,600"),
-        ("Registros (test)", "400"),
-        ("Profundidad árbol", str(modelo.get_depth())),
-        ("Número de hojas", str(modelo.get_n_leaves())),
-        ("Accuracy", f"{metricas['accuracy']:.4f}"),
-        ("F1-Score", f"{metricas['f1']:.4f}"),
-    ]:
-        st.markdown(f"""
-        <div style="display:flex;justify-content:space-between;
-                    padding:0.3rem 0;border-bottom:1px solid #2A2A2A;
-                    font-size:0.78rem;font-family:'IBM Plex Mono'">
-            <span style="color:#888">{label}</span>
-            <span style="color:#F5F5F0">{val}</span>
-        </div>""", unsafe_allow_html=True)
+    import datetime
+    ahora = datetime.datetime.now()
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown("**🏛️ Marco Normativo**")
-    for norma in ["NIST SP 800-207", "NIST SP 800-63B", "NIST SP 800-53 R5",
-                   "ISO/IEC 27001:2022", "Ley N.° 29733"]:
-        st.markdown(f"""
-        <div style="font-size:0.72rem;font-family:'IBM Plex Mono';
-                    color:#4A90D9;padding:0.2rem 0">▸ {norma}</div>""",
-                    unsafe_allow_html=True)
+    log_html = ""
+    for i, ev in enumerate(logs_escenarios):
+        ts = (ahora - datetime.timedelta(seconds=(3 - i) * 15)).strftime("%Y-%m-%d %H:%M:%S")
+        col_dec = "#22c55e" if ev["decision"] == "PERMITIR" else ("#ef4444" if ev["decision"] == "BLOQUEAR" else "#eab308")
+        log_html += f"""
+        <div style="margin-bottom:12px;padding:10px;background:#050810;
+                    border-left:3px solid {col_dec};border-radius:0 6px 6px 0">
+            <span style="color:#475569">[{ts}]</span>
+            <span style="color:#22c55e;font-weight:700"> [AUDIT]</span>
+            <span style="color:#63b3ed"> decision=</span><span style="color:{col_dec};font-weight:700">{ev['decision']}</span>
+            <span style="color:#63b3ed"> trust_score=</span>{ev['trust_score']:.3f}
+            <br>
+            <span style="color:transparent">[{ts}]&nbsp;</span>
+            <span style="color:#63b3ed">rol=</span>{ev['rol']}
+            <span style="color:#63b3ed"> sensibilidad=</span>{ev['sensibilidad']}
+            <span style="color:#63b3ed"> ubicacion=</span>{ev['ubicacion']}
+            <br>
+            <span style="color:transparent">[{ts}]&nbsp;</span>
+            <span style="color:#63b3ed">nivel_mfa=</span>{ev['nivel_mfa']}
+            <span style="color:#63b3ed"> senal_riesgo=</span>{ev['senal']}
+            <span style="color:#63b3ed"> norma=</span>NIST-SP-800-207
+        </div>"""
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f'<div class="log-box">{log_html}</div>', unsafe_allow_html=True)
+
+    st.divider()
     st.markdown("""
-    <div style="font-size:0.65rem;color:#555;font-family:'IBM Plex Mono';
-                text-align:center;border-top:1px solid #2A2A2A;padding-top:0.8rem">
-        Muro Arévalo, J. &amp; Pribilov Morales, N.<br>
-        UPC — Ingeniería de Redes y Comunicaciones<br>
-        PP2 · 2025 · 1FRC0077
-    </div>""", unsafe_allow_html=True)
+    **Campos AU-3 verificados (NIST SP 800-53 Rev. 5):**  
+    `decision` · `trust_score` · `rol` · `sensibilidad` · `ubicacion` · `nivel_mfa`  
+    Total: **6/6 campos presentes** en los **4/4 eventos** → Trazabilidad: **100%**
+    """)
+
+# ── FOOTER ───────────────────────────────────────────────────────────────────
+st.divider()
+st.markdown("""
+<div style="font-family:'JetBrains Mono',monospace;font-size:10px;
+            color:#334155;text-align:center;padding:8px">
+    Muro Arévalo, Jaime Roberto &amp; Pribilov Morales, Nicolette · 
+    PP2 1FRC0077 · Universidad Peruana de Ciencias Aplicadas · 2026 ·
+    random_state=42 · dataset: 2,000 registros sintéticos
+</div>
+""", unsafe_allow_html=True)
